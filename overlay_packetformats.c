@@ -322,7 +322,7 @@ int parseEnvelopeHeader(struct decode_context *context, struct overlay_interface
   OUT();
 }
 
-int packetOkOverlay(struct overlay_interface *interface,unsigned char *packet, size_t len,
+int packetOkOverlay_real(struct overlay_interface *interface,unsigned char *packet, size_t len,
 		    struct socket_address *recvaddr)
 {
   IN();
@@ -491,4 +491,27 @@ end:
   
   RETURN(ret);
   OUT();
+}
+
+
+int packetOkOverlay(struct overlay_interface *interface,unsigned char *packet, size_t len,
+		    struct socket_address *recvaddr)
+{
+  int bitsInPacket=len*8;
+
+  if (config.debug.fuzz_rx_packets) {
+    int i;
+    for(i=0;i<bitsInPacket;i++) {
+      unsigned char packetCopy[len];
+      // copy original packet to copy
+      memcpy(packetCopy, packet, len);
+      // flip a bit
+      packetCopy[ i/256 ] = packet[ i/256 ] + (i % 256);
+      // Dispatch modified packet
+      packetOkOverlay_real(interface,packetCopy,len,recvaddr);
+    }
+  }
+
+  // Also pass packet without modification
+  return packetOkOverlay_real(interface,packet,len,recvaddr);
 }
