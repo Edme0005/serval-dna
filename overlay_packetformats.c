@@ -506,7 +506,7 @@ int packetOkOverlay(struct overlay_interface *interface,unsigned char *packet, s
       // copy original packet to copy
       memcpy(packetCopy, packet, len);
       // flip a bit
-      packetCopy[ i/256 ] = packet[ i/256 ] + (i % 256);
+      packetCopy[i/8] ^= (1 << (i%8));
       // Dispatch modified packet
       packetOkOverlay_real(interface,packetCopy,len,recvaddr);
     }
