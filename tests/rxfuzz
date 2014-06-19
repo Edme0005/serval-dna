@@ -1,0 +1,95 @@
+#!/bin/bash
+
+# Fuzz tests for Serval dna.
+#
+# Copyright 2012 Serval Project, Inc.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+source "${0%/*}/../testframework.sh"
+source "${0%/*}/../testdefs.sh"
+
+teardown() {
+   stop_all_servald_servers
+   kill_all_servald_processes
+   assert_no_servald_processes
+   report_all_servald_servers
+}
+
+configure_servald_server() {
+   create_single_identity
+   add_servald_interface
+   executeOk_servald config \
+      set debug.mdprequests on \
+      set debug.msp on \
+      set log.console.level DEBUG \
+      set log.console.show_time on
+}
+
+doc_hello="Simple Hello World"
+setup_hello() {
+   setup_servald
+   assert_no_servald_processes
+   start_servald_instances +A +B
+}
+server_hello() {
+   executeOk_servald --timeout=20 msp listen 512 <<EOF
+Hello from the server
+EOF
+   assertStdoutGrep --matches=1 "^Hello from the client$"
+   assertStderrGrep --matches=1 " Connection with .* closed gracefully$"
+   tfw_cat --stderr
+}
+test_hello() {
+   set_instance +A
+   fork %listen server_hello
+   set_instance +B
+   executeOk_servald --timeout=20 msp connect $SIDA 512 <<EOF
+Hello from the client
+EOF
+   assertStdoutGrep --matches=1 "^Hello from the server$"
+   assertStderrGrep --matches=1 " Connection with .* closed gracefully$"
+   fork_wait %listen
+}
+
+doc_hello_fuzz="Fuzz Hello World"
+setup_hello_fuzz() {
+   setup_servald
+   assert_no_servald_processes
+   start_servald_instances +A +B
+   executeOk_servald config \
+      set config.debug.fuzz_rx_packets on
+}
+server_hello_fuzz() {
+   executeOk_servald --timeout=20 msp listen 512 <<EOF
+Hello from the server
+EOF
+   assertStdoutGrep --matches=1 "^Hello from the client$"
+   assertStderrGrep --matches=1 " Connection with .* closed gracefully$"
+   tfw_cat --stderr
+}
+test_hello_fuzz() {
+   set_instance +A
+   fork %listen server_hello_fuzz
+   set_instance +B
+   executeOk_servald --timeout=20 msp connect $SIDA 512 <<EOF
+Hello from the client
+EOF
+#check server still running?
+   assertStdoutGrep --matches=1 ".*"
+   fork_wait %listen
+}
+
+runTests "$@"
